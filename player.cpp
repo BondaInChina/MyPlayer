@@ -1,28 +1,7 @@
 #include "player.h"
-#include <iostream>
-using namespace std;
+#include <QAudioFormat>
+#include <QAudioOutput>
 
-#ifndef _WIN32
-static const char* mp4File = "/home/test.mp4";
-static const char* yuvFile = "/home/liangjf/yuv.yuv";
-static const char* rgbFile = "/home/liangjf/rgb.yuv";
-static const char* jpegFile = "/home/liangjf";
-extern "C"{
-#include "/usr/local/ffmpeg/include/libavformat/avformat.h"
-#include "/usr/local/ffmpeg/include/libavcodec/avcodec.h"
-#include "/usr/local/ffmpeg/include/libswscale/swscale.h"
-}
-#else
-static const char* mp4File = "E:\\test.mp4";
-static const char* yuvFile = "E:\\yuv.yuv";
-static const char* rgbFile = "E:\\rgb.yuv";
-static const char* jpegFile = "E:\\";
-extern "C"{
-#include "libavformat/avformat.h"
-#include "libavcodec/avcodec.h"
-#include "libswscale/swscale.h"
-}
-#endif
 
 static double avio_r2d(AVRational ration)
 {
@@ -34,115 +13,119 @@ Player::Player()
 
 }
 
-bool Player::Init()
+bool Player::Open()
 {
-
+//    QString strPath = QFileDialog::getOpenFileName(this, tr("Open file dialog"), tr("/home"), tr("Videos (*.mp4 *.avi *.mkv)"));
+//    if(strPath == NULL)
+//    {
+//        emit sigSendErrorMsg("Open file failed!");
+//        return false;
+//    }
+//    std::string str = strPath.toStdString();
+//    mPath = str.c_str(); // 此处应该会出问题
+    return true;
 }
 
-void Player::run()
+bool Player::Init(const char *path)
 {
-    const char *path = mp4File;
+    mPath = path;
     //初始化封装库
     av_register_all();
-
     //解封装上下文
-    AVFormatContext *ic = NULL;
-    int re = avformat_open_input(
-        &ic,
-        path,
+    mFormatCtx = NULL;
+    int ret = avformat_open_input(
+        &mFormatCtx,
+        mPath,
         NULL,  // 0表示自动选择解封器
         NULL //参数设置，比如rtsp的延时时间
     );
-    if (re != 0)
+    if (ret != 0)
     {
         char buf[1024] = { 0 };
-        av_strerror(re, buf, sizeof(buf) - 1);
-        cout << "open " << path << " failed! :" << buf << endl;
-        getchar();
-        return;
+        av_strerror(ret, buf, sizeof(buf) - 1);
+        emit sigSendErrorMsg("Open file failed!");
+        return false;
     }
-    cout << "open " << path << " success! " << endl;
-    avformat_find_stream_info(ic, NULL);
-    av_dump_format(ic,0,path,0);
+
+    avformat_find_stream_info(mFormatCtx, NULL);
 
     int videoIndex = -1;
     int audioIndex = -1;
-    for(int i = 0; i < ic->nb_streams; i++)
+    for(int i = 0; i < mFormatCtx->nb_streams; i++)
     {
-        if(ic->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO)
+        if(mFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO)
         {
             videoIndex = i;
         }
-        else if(ic->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
+        else if(mFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
         {
             audioIndex = i;
         }
     }
+    mVideoStream = mFormatCtx->streams[videoIndex];
+    mAudioStream = mFormatCtx->streams[audioIndex];
 
-    AVStream* videoStream = ic->streams[videoIndex];
-    AVStream* audioStream = ic->streams[audioIndex];
-    cout << "video duration(ms): " << videoStream->duration * avio_r2d(videoStream->time_base) << endl;
-    cout << "audio duration(ms): " << audioStream->duration * avio_r2d(audioStream->time_base) << endl;
-    cout << "video frame rate: " << avio_r2d(videoStream->avg_frame_rate) << endl;
-    cout << "width: " << videoStream->codec->width << ", height: " << videoStream->codec->height <<endl;
-    cout << "sample_rate = " << audioStream->codec->sample_rate << endl;
-    //AVSampleFormat;
-    cout << "channels = " << audioStream->codec->channels << endl;
-
-//    int64_t time = 200;
-//    av_seek_frame(ic, videoIndex,
-//                  (double)time / (double)avio_r2d(videoStream->time_base),
-//                  AVSEEK_FLAG_BACKWARD|AVSEEK_FLAG_FRAME);
     // 找视频解码器
-    AVCodecContext *videoCodecContext= videoStream->codec;
-    AVCodec *videoCodec = avcodec_find_decoder
-            //(ic->streams[videoIndex]->);
-            (videoCodecContext->codec_id);
-    if(videoCodec == NULL)
+    mVideoCodecCtx= mVideoStream->codec;
+    mVideoCodec = avcodec_find_decoder(mVideoCodecCtx->codec_id);
+    if(mVideoCodec == NULL)
     {
-        cout << "can not find codec id: " << videoCodecContext->codec_id << endl;
-        getchar();
-        return;
+        emit sigSendErrorMsg("Can not find video decoder!");
+        return false;
     }
-    int ret = avcodec_open2(videoCodecContext, videoCodec, NULL);
+    ret = avcodec_open2(mVideoCodecCtx, mVideoCodec, NULL);
     if(ret != 0)
     {
-        char msg[1024] = {0};
-        av_strerror(ret, msg, 1024);
-        cout << msg << endl;
-        getchar();
-        return;
+        emit sigSendErrorMsg("Can not open video decoder!");
+        return false;
     }
-    cout << "open video codec success" << endl;
 
     // 找音频解码器
-    AVCodecContext *audioCodecContext= audioStream->codec;
-    AVCodec *audioCodec = avcodec_find_decoder(audioCodecContext->codec_id);
-    if(!audioCodec)
+    mAudioCodecCtx= mAudioStream->codec;
+    mAudioCodec = avcodec_find_decoder(mAudioCodecCtx->codec_id);
+    if(!mAudioCodec)
     {
-        cout << "can not find codec id: " << audioCodecContext->codec_id << endl;
-        getchar();
-        return;
+        emit sigSendErrorMsg("Can not find audio decoder!");
+        return false;
     }
-    ret = avcodec_open2(audioCodecContext, audioCodec, NULL);
+    ret = avcodec_open2(mAudioCodecCtx, mAudioCodec, NULL);
     if(ret != 0)
     {
-        char msg[1024] = {0};
-        av_strerror(ret, msg, 1024);
-        getchar();
-        return;
+        emit sigSendErrorMsg("Can not open audio decoder!");
+        return false;
     }
-    cout << "open audio codec success" << endl;
-    int got_pic = 0;
+}
+
+void Player::run()
+{
+//    int64_t time = 200;
+//    av_seek_frame(ic, videoIndex,
+//                  (double)time / (double)avio_r2d(mVideoStream->time_base),
+//                  AVSEEK_FLAG_BACKWARD|AVSEEK_FLAG_FRAME);
+
+    QAudioFormat fmt;
+    fmt.setSampleRate(48000);
+    fmt.setSampleSize(16);
+    fmt.setChannelCount(2);
+    fmt.setCodec("audio/pcm");
+    fmt.setByteOrder(QAudioFormat::LittleEndian);
+    fmt.setSampleType(QAudioFormat::UnSignedInt);
+    QAudioOutput *out = new QAudioOutput(fmt);
+    QIODevice *io = out->start(); //开始播放音频
+    int size = out->periodSize();
+    char *buf = new char[size];
+
+    int got_frame = 0;
     AVFrame *vFrame = av_frame_alloc();
+    AVFrame *aFrame = av_frame_alloc();
     AVPacket *pkt = (AVPacket *) malloc(sizeof(AVPacket)); //分配一个packet
-    av_new_packet(pkt, videoCodecContext->width * videoCodecContext->height);
+    av_new_packet(pkt, mVideoCodecCtx->width * mVideoCodecCtx->height);
     //av_init_packet(pkt);
-    SwsContext *sws = sws_getContext(videoStream->codec->width,
-                                     videoStream->codec->height,
-                                     videoStream->codec->pix_fmt,
-                                     videoStream->codec->width,
-                                     videoStream->codec->height,
+    SwsContext *sws = sws_getContext(mVideoStream->codec->width,
+                                     mVideoStream->codec->height,
+                                     mVideoStream->codec->pix_fmt,
+                                     mVideoStream->codec->width,
+                                     mVideoStream->codec->height,
                                      AV_PIX_FMT_RGB32,
                                      SWS_BICUBIC,
                                      NULL,
@@ -153,18 +136,14 @@ void Player::run()
     int index = 0;
     while(1)
     {
-        if(av_read_frame(ic,pkt) != 0)
+        if(av_read_frame(mFormatCtx,pkt) != 0)
         {
             break;
         }
-        if(pkt->stream_index == videoIndex)
+        if(pkt->stream_index == mVideoStream->index)
         {
-            cout << "packet size: " << pkt->size << endl;
-            cout << "pts: " << pkt->pts * avio_r2d(videoStream->time_base) << endl;
-            cout << "dts: " << pkt->dts * avio_r2d(videoStream->time_base)<< endl;
-
-            avcodec_decode_video2(videoCodecContext, vFrame, &got_pic, pkt);
-            if(got_pic != 0)
+            avcodec_decode_video2(mVideoCodecCtx, vFrame, &got_frame, pkt);
+            if(got_frame != 0)
             {
                 if(rgb[0] == NULL)
                 {
@@ -177,14 +156,28 @@ void Player::run()
                 //把这个RGB数据 用QImage加载
                 QImage tmpImg(rgb[0],vFrame->width,vFrame->height,QImage::Format_RGB32);
                 QImage image = tmpImg.copy(); //把图像复制一份 传递给界面显示
-                emit sig_GetOneFrame(tmpImg);  //发送信号
+                emit sigGetOneFrame(tmpImg);  //发送信号
+            }
+        }
+        if(pkt->stream_index == mAudioStream->index)
+        {
+            got_frame = 0;
+            avcodec_decode_audio4(mAudioCodecCtx, aFrame, &got_frame, pkt);
+            if(got_frame != 0)
+            {
+                while (out->bytesFree() < size)
+                {
+                    QThread::msleep(1);
+                }
+
+                io->write((const char *)aFrame->data, aFrame->linesize[0]);
             }
         }
     }
 
-    if (ic)
+    if (mFormatCtx)
     {
-        avformat_close_input(&ic);
+        avformat_close_input(&mFormatCtx);
     }
     av_free_packet(pkt);
 }

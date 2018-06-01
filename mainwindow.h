@@ -19,6 +19,7 @@ private:
     Player *mPlayer;
 private slots:
     void slotGetOneFrame(QImage img);
+    void slotShowErrorMsg(QString msg);
 };
 
 #endif // MAINWINDOW_H

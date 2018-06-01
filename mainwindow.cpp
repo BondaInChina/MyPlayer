@@ -2,6 +2,8 @@
 #include <QHBoxLayout>
 #include <QPaintEvent>
 #include <QPainter>
+#include <QMessageBox>
+#include <QFileDialog>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent)
@@ -9,7 +11,16 @@ MainWindow::MainWindow(QWidget *parent) :
     resize(QSize(800, 600));
     setWindowTitle("BondaPlayer");
     mPlayer = new Player;
-    connect(mPlayer,SIGNAL(sig_GetOneFrame(QImage)),this,SLOT(slotGetOneFrame(QImage)));
+    connect(mPlayer,SIGNAL(sigGetOneFrame(QImage)),this,SLOT(slotGetOneFrame(QImage)));
+    connect(mPlayer,SIGNAL(sigSendErrorMsg(QString)),this,SLOT(slotShowErrorMsg(QString)));
+//    QString strPath = QFileDialog::getOpenFileName(this, tr("Open file dialog"), tr("/home"), tr("Videos (*.mp4 *.avi *.mkv)"));
+//    if(strPath == NULL)
+//    {
+//        slotShowErrorMsg("Open file failed!");
+//    }
+//    std::string str = strPath.toStdString();
+
+    mPlayer->Init("E:\\test.mp4"); // 此处应该会出问题
     mPlayer->start();
 }
 
@@ -42,4 +53,9 @@ void MainWindow::slotGetOneFrame(QImage img)
 {
     mImage = img;
     update(); //调用update将执行 paintEvent函数
+}
+
+void MainWindow::slotShowErrorMsg(QString msg)
+{
+    QMessageBox::critical(this, "Error", msg, QMessageBox::Ok);
 }
