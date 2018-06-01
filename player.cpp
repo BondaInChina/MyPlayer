@@ -1,0 +1,190 @@
+#include "player.h"
+#include <iostream>
+using namespace std;
+
+#ifndef _WIN32
+static const char* mp4File = "/home/test.mp4";
+static const char* yuvFile = "/home/liangjf/yuv.yuv";
+static const char* rgbFile = "/home/liangjf/rgb.yuv";
+static const char* jpegFile = "/home/liangjf";
+extern "C"{
+#include "/usr/local/ffmpeg/include/libavformat/avformat.h"
+#include "/usr/local/ffmpeg/include/libavcodec/avcodec.h"
+#include "/usr/local/ffmpeg/include/libswscale/swscale.h"
+}
+#else
+static const char* mp4File = "E:\\test.mp4";
+static const char* yuvFile = "E:\\yuv.yuv";
+static const char* rgbFile = "E:\\rgb.yuv";
+static const char* jpegFile = "E:\\";
+extern "C"{
+#include "libavformat/avformat.h"
+#include "libavcodec/avcodec.h"
+#include "libswscale/swscale.h"
+}
+#endif
+
+static double avio_r2d(AVRational ration)
+{
+    return ration.den == 0? 0 : (double)ration.num / (double)ration.den;
+}
+
+Player::Player()
+{
+
+}
+
+bool Player::Init()
+{
+
+}
+
+void Player::run()
+{
+    const char *path = mp4File;
+    //初始化封装库
+    av_register_all();
+
+    //解封装上下文
+    AVFormatContext *ic = NULL;
+    int re = avformat_open_input(
+        &ic,
+        path,
+        NULL,  // 0表示自动选择解封器
+        NULL //参数设置，比如rtsp的延时时间
+    );
+    if (re != 0)
+    {
+        char buf[1024] = { 0 };
+        av_strerror(re, buf, sizeof(buf) - 1);
+        cout << "open " << path << " failed! :" << buf << endl;
+        getchar();
+        return;
+    }
+    cout << "open " << path << " success! " << endl;
+    avformat_find_stream_info(ic, NULL);
+    av_dump_format(ic,0,path,0);
+
+    int videoIndex = -1;
+    int audioIndex = -1;
+    for(int i = 0; i < ic->nb_streams; i++)
+    {
+        if(ic->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO)
+        {
+            videoIndex = i;
+        }
+        else if(ic->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
+        {
+            audioIndex = i;
+        }
+    }
+
+    AVStream* videoStream = ic->streams[videoIndex];
+    AVStream* audioStream = ic->streams[audioIndex];
+    cout << "video duration(ms): " << videoStream->duration * avio_r2d(videoStream->time_base) << endl;
+    cout << "audio duration(ms): " << audioStream->duration * avio_r2d(audioStream->time_base) << endl;
+    cout << "video frame rate: " << avio_r2d(videoStream->avg_frame_rate) << endl;
+    cout << "width: " << videoStream->codec->width << ", height: " << videoStream->codec->height <<endl;
+    cout << "sample_rate = " << audioStream->codec->sample_rate << endl;
+    //AVSampleFormat;
+    cout << "channels = " << audioStream->codec->channels << endl;
+
+//    int64_t time = 200;
+//    av_seek_frame(ic, videoIndex,
+//                  (double)time / (double)avio_r2d(videoStream->time_base),
+//                  AVSEEK_FLAG_BACKWARD|AVSEEK_FLAG_FRAME);
+    // 找视频解码器
+    AVCodecContext *videoCodecContext= videoStream->codec;
+    AVCodec *videoCodec = avcodec_find_decoder
+            //(ic->streams[videoIndex]->);
+            (videoCodecContext->codec_id);
+    if(videoCodec == NULL)
+    {
+        cout << "can not find codec id: " << videoCodecContext->codec_id << endl;
+        getchar();
+        return;
+    }
+    int ret = avcodec_open2(videoCodecContext, videoCodec, NULL);
+    if(ret != 0)
+    {
+        char msg[1024] = {0};
+        av_strerror(ret, msg, 1024);
+        cout << msg << endl;
+        getchar();
+        return;
+    }
+    cout << "open video codec success" << endl;
+
+    // 找音频解码器
+    AVCodecContext *audioCodecContext= audioStream->codec;
+    AVCodec *audioCodec = avcodec_find_decoder(audioCodecContext->codec_id);
+    if(!audioCodec)
+    {
+        cout << "can not find codec id: " << audioCodecContext->codec_id << endl;
+        getchar();
+        return;
+    }
+    ret = avcodec_open2(audioCodecContext, audioCodec, NULL);
+    if(ret != 0)
+    {
+        char msg[1024] = {0};
+        av_strerror(ret, msg, 1024);
+        getchar();
+        return;
+    }
+    cout << "open audio codec success" << endl;
+    int got_pic = 0;
+    AVFrame *vFrame = av_frame_alloc();
+    AVPacket *pkt = (AVPacket *) malloc(sizeof(AVPacket)); //分配一个packet
+    av_new_packet(pkt, videoCodecContext->width * videoCodecContext->height);
+    //av_init_packet(pkt);
+    SwsContext *sws = sws_getContext(videoStream->codec->width,
+                                     videoStream->codec->height,
+                                     videoStream->codec->pix_fmt,
+                                     videoStream->codec->width,
+                                     videoStream->codec->height,
+                                     AV_PIX_FMT_RGB32,
+                                     SWS_BICUBIC,
+                                     NULL,
+                                     NULL,
+                                     NULL
+                                     );
+    uint8_t* rgb[2] = {0};
+    int index = 0;
+    while(1)
+    {
+        if(av_read_frame(ic,pkt) != 0)
+        {
+            break;
+        }
+        if(pkt->stream_index == videoIndex)
+        {
+            cout << "packet size: " << pkt->size << endl;
+            cout << "pts: " << pkt->pts * avio_r2d(videoStream->time_base) << endl;
+            cout << "dts: " << pkt->dts * avio_r2d(videoStream->time_base)<< endl;
+
+            avcodec_decode_video2(videoCodecContext, vFrame, &got_pic, pkt);
+            if(got_pic != 0)
+            {
+                if(rgb[0] == NULL)
+                {
+                    rgb[0] = new unsigned char[vFrame->width * vFrame->height * 4];
+                }
+                int lines[2] = {vFrame->width * 4};
+
+                int ret = sws_scale(sws, vFrame->data, vFrame->linesize,0,vFrame->height,rgb,lines);
+
+                //把这个RGB数据 用QImage加载
+                QImage tmpImg(rgb[0],vFrame->width,vFrame->height,QImage::Format_RGB32);
+                QImage image = tmpImg.copy(); //把图像复制一份 传递给界面显示
+                emit sig_GetOneFrame(tmpImg);  //发送信号
+            }
+        }
+    }
+
+    if (ic)
+    {
+        avformat_close_input(&ic);
+    }
+    av_free_packet(pkt);
+}
