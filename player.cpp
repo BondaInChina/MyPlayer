@@ -8,6 +8,24 @@ static double avio_r2d(AVRational ration)
     return ration.den == 0? 0 : (double)ration.num / (double)ration.den;
 }
 
+static bool WritePcm2File(const char *path, uint8_t *data, int size)
+{
+    FILE *file = fopen(path, "ab+");
+    if(file == NULL)
+    {
+        return false;
+    }
+
+    int len = fwrite(data, 1, size, file);
+    if(len < size)
+    {
+        fclose(file);
+        return false;
+    }
+    fclose(file);
+    return true;
+}
+
 Player::Player()
 {
 
@@ -134,6 +152,22 @@ void Player::run()
                                      );
     uint8_t* rgb[2] = {0};
     int index = 0;
+
+    SwrContext *swrCtx = swr_alloc();
+    swrCtx = swr_alloc_set_opts(swrCtx,
+                                av_get_default_channel_layout(2),
+                                AV_SAMPLE_FMT_S16,
+                                mAudioCodecCtx->sample_rate,
+                                av_get_default_channel_layout(mAudioCodecCtx->channels),
+                                mAudioCodecCtx->sample_fmt,
+                                mAudioCodecCtx->sample_rate,
+                                0,
+                                NULL);
+    int ret = swr_init(swrCtx);
+
+    uint8_t *pcm = NULL;
+
+
     while(1)
     {
         if(av_read_frame(mFormatCtx,pkt) != 0)
@@ -167,10 +201,16 @@ void Player::run()
             {
                 while (out->bytesFree() < size)
                 {
-                    QThread::msleep(1);
+                    //QThread::msleep(1);
+                }
+                if(pcm == NULL)
+                {
+                    pcm = new uint8_t[aFrame->nb_samples * aFrame->channels * 2];
                 }
 
-                io->write((const char *)aFrame->data, aFrame->linesize[0]);
+                ret = swr_convert(swrCtx, &pcm, aFrame->nb_samples, (const uint8_t**)aFrame->data, aFrame->nb_samples);
+                WritePcm2File("E:\\test0.pcm", pcm, aFrame->nb_samples * aFrame->channels * 2);
+                io->write((const char *)pcm, aFrame->nb_samples * aFrame->channels * 2);
             }
         }
     }
