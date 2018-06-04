@@ -25,10 +25,16 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    player.cpp
+    player.cpp \
+    common.cpp \
+    video.cpp \
+    audio.cpp
 
 HEADERS  += mainwindow.h \
-    player.h
+    player.h \
+    common.h \
+    video.h \
+    audio.h
 
 win32{
 INCLUDEPATH += $$PWD/ffmpeg/include

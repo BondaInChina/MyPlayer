@@ -1,34 +1,16 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+
 #include <QObject>
 #include <QThread>
 #include <QImage>
 #include <iostream>
+#include "video.h"
+#include "audio.h"
 using namespace std;
 
-#ifndef _WIN32
-static const char* mp4File = "/home/test.mp4";
-static const char* yuvFile = "/home/liangjf/yuv.yuv";
-static const char* rgbFile = "/home/liangjf/rgb.yuv";
-static const char* jpegFile = "/home/liangjf";
-extern "C"{
-#include "/usr/local/ffmpeg/include/libavformat/avformat.h"
-#include "/usr/local/ffmpeg/include/libavcodec/avcodec.h"
-#include "/usr/local/ffmpeg/include/libswscale/swscale.h"
-}
-#else
-static const char* mp4File = "E:\\test.mp4";
-static const char* yuvFile = "E:\\yuv.yuv";
-static const char* rgbFile = "E:\\rgb.yuv";
-static const char* jpegFile = "E:\\";
-extern "C"{
-#include "libavformat/avformat.h"
-#include "libavcodec/avcodec.h"
-#include "libswscale/swscale.h"
-#include "libswresample/swresample.h"
-}
-#endif
+
 
 class Player : public QThread
 {
@@ -42,8 +24,9 @@ public:
 //    bool Seek();  // 拖动
 //    bool Stop(); // 停止播放
     bool Init(const char *path);
+    Video video;
+    Audio audio;
 signals:
-    void sigGetOneFrame(QImage);
     void sigSendErrorMsg(QString);
 protected:
     void run();
@@ -56,6 +39,8 @@ private:
     AVCodec *mAudioCodec;
     AVCodecContext *mVideoCodecCtx;
     AVCodecContext *mAudioCodecCtx;
+
+
 };
 
 #endif // PLAYER_H

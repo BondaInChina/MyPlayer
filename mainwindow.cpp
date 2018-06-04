@@ -11,7 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
     resize(QSize(800, 600));
     setWindowTitle("BondaPlayer");
     mPlayer = new Player;
-    connect(mPlayer,SIGNAL(sigGetOneFrame(QImage)),this,SLOT(slotGetOneFrame(QImage)));
+    connect(&mPlayer->video,SIGNAL(sigGetOneFrame(QImage)),this,SLOT(slotGetOneFrame(QImage)));
     connect(mPlayer,SIGNAL(sigSendErrorMsg(QString)),this,SLOT(slotShowErrorMsg(QString)));
 //    QString strPath = QFileDialog::getOpenFileName(this, tr("Open file dialog"), tr("/home"), tr("Videos (*.mp4 *.avi *.mkv)"));
 //    if(strPath == NULL)
