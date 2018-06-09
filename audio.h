@@ -11,6 +11,8 @@ public:
     Audio();
     PacketQueue *mQueue;
     AVCodecContext *mCodec;
+    void SetAudioStream(AVStream *stream);
+    AVStream *mAudioStream;
 protected:
     void run();
 };

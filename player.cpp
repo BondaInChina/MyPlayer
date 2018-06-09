@@ -1,16 +1,11 @@
 #include "player.h"
 
-static double avio_r2d(AVRational ration)
-{
-    return ration.den == 0? 0 : (double)ration.num / (double)ration.den;
-}
-
-
-
 Player::Player()
 {
 
 }
+
+int64_t Player::mClock = 0;
 
 bool Player::Open()
 {
@@ -110,6 +105,8 @@ void Player::run()
 //                  (double)time / (double)avio_r2d(mVideoStream->time_base),
 //                  AVSEEK_FLAG_BACKWARD|AVSEEK_FLAG_FRAME);
 
+    video.SetVideoStream(mVideoStream);
+    audio.SetAudioStream(mAudioStream);
     video.mQueue = new PacketQueue();
     InitQueue(video.mQueue);
     audio.mQueue = new PacketQueue();

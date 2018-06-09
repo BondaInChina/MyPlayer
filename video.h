@@ -13,6 +13,8 @@ public:
     Video();
     PacketQueue *mQueue;
     AVCodecContext *mCodec;
+    AVStream *mVideoStream;
+    void SetVideoStream(AVStream *stream);
 signals:
     void sigGetOneFrame(QImage);
 protected:

@@ -26,6 +26,7 @@ public:
     bool Init(const char *path);
     Video video;
     Audio audio;
+    static int64_t mClock;
 signals:
     void sigSendErrorMsg(QString);
 protected:

@@ -35,6 +35,7 @@ typedef struct PacketQueue {
     condition_variable *pCondition;
 } PacketQueue;
 
+double avio_r2d(AVRational ration);
 int InitQueue(PacketQueue *queue);
 int packet_queue_put(PacketQueue *q, AVPacket *pkt);
 int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block);

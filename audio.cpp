@@ -1,10 +1,17 @@
 #include "audio.h"
+#include "player.h"
+#include "common.h"
 #include <QAudioFormat>
 #include <QAudioOutput>
 
 Audio::Audio()
 {
 
+}
+
+void Audio::SetAudioStream(AVStream *stream)
+{
+    mAudioStream = stream;
 }
 
 static bool WritePcm2File(const char *path, uint8_t *data, int size)
@@ -74,6 +81,7 @@ void Audio::run()
             ret = swr_convert(swrCtx, &pcm, aFrame->nb_samples, (const uint8_t**)aFrame->data, aFrame->nb_samples);
             WritePcm2File("E:\\test1.pcm", pcm, aFrame->nb_samples * aFrame->channels * 2);
             io->write((const char *)pcm, aFrame->nb_samples * aFrame->channels * 2);
+            Player::mClock = pkt.pts * avio_r2d(mAudioStream->time_base) * 1000;
         }
     }
 }

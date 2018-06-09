@@ -1,8 +1,15 @@
 #include "video.h"
+#include "common.h"
+#include "player.h"
+#include <QDateTime>
 
 Video::Video()
 {
+}
 
+void Video::SetVideoStream(AVStream *stream)
+{
+    mVideoStream = stream;
 }
 
 void Video::run()
@@ -23,6 +30,8 @@ void Video::run()
     static AVPacket pkt;
     int got_frame = 0;
     AVFrame *vFrame = av_frame_alloc();
+    //QDateTime start_time = QDateTime::currentDateTime();
+    qint64 audio_clock = 0;
     while(1)
     {
         packet_queue_get(mQueue, &pkt, 0);
@@ -40,6 +49,12 @@ void Video::run()
             //把这个RGB数据 用QImage加载
             QImage tmpImg(rgb[0],vFrame->width,vFrame->height,QImage::Format_RGB32);
             QImage image = tmpImg.copy(); //把图像复制一份 传递给界面显示
+            double pts = pkt.pts *  avio_r2d(mVideoStream->time_base) * 1000;
+            while (Player::mClock < pts)
+            {
+                QThread::msleep(10);
+            }
+
             emit sigGetOneFrame(tmpImg);  //发送信号
         }
     }

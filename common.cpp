@@ -1,5 +1,11 @@
 #include "common.h"
 
+
+double avio_r2d(AVRational ration)
+{
+    return ration.den == 0? 0 : (double)ration.num / (double)ration.den;
+}
+
 int InitQueue(PacketQueue *queue)
 {
     memset(queue, 0, sizeof(PacketQueue));
